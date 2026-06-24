@@ -246,83 +246,131 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
     final progressVisible =
         _browserState.isLoading || _browserState.progress < 1;
 
+    final webView = _isPreparing
+        ? const Center(child: CircularProgressIndicator())
+        : InAppWebView(
+            key: _webViewKey,
+            initialUrlRequest: URLRequest(url: WebUri(_initialUrl!)),
+            initialUserScripts: _userScripts,
+            initialSettings: _settings,
+            onWebViewCreated: (controller) {
+              _browserController.attach(controller);
+              unawaited(_syncNavigationState());
+            },
+            onLoadStart: (controller, url) {
+              _handleUrlChanged(url, isLoading: true, progress: 0);
+              unawaited(_syncNavigationState());
+            },
+            onLoadStop: (controller, url) {
+              _handleUrlChanged(url, isLoading: false, progress: 1);
+              unawaited(_syncNavigationState());
+            },
+            onProgressChanged: (controller, progress) {
+              _handleUrlChanged(
+                null,
+                isLoading: progress < 100,
+                progress: progress / 100,
+              );
+            },
+            onUpdateVisitedHistory: (controller, url, androidIsReload) {
+              _handleUrlChanged(url);
+              unawaited(_syncNavigationState());
+            },
+            onEnterFullscreen: (controller) {
+              unawaited(_enterFullscreen());
+            },
+            onExitFullscreen: (controller) {
+              unawaited(_exitFullscreen());
+            },
+            onPermissionRequest: (controller, request) async {
+              return _handlePermissionRequest(request);
+            },
+            shouldInterceptRequest: (controller, request) async {
+              if (AdBlocker.shouldBlock(request.url.toString())) {
+                return WebResourceResponse(data: Uint8List(0));
+              }
+              return null;
+            },
+          );
+
     return Scaffold(
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            if (!_isFullYouTubeMode)
-              Material(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: AddressBar(
-                    text: _browserState.currentUrl,
-                    onSubmitted: _handleSubmittedAddress,
+            // ── Main content column ──────────────────────────────────────────
+            Column(
+              children: [
+                if (!_isFullYouTubeMode)
+                  Material(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: AddressBar(
+                        text: _browserState.currentUrl,
+                        onSubmitted: _handleSubmittedAddress,
+                      ),
+                    ),
+                  ),
+                LoadingProgressBar(
+                  progress: _browserState.progress,
+                  visible: !_isPreparing && progressVisible,
+                ),
+                Expanded(child: webView),
+                if (!_isFullYouTubeMode)
+                  BrowserToolbar(
+                    canGoBack: _browserState.canGoBack,
+                    canGoForward: _browserState.canGoForward,
+                    onBack: () => unawaited(_browserController.goBack()),
+                    onForward: () => unawaited(_browserController.goForward()),
+                    onReload: () => unawaited(_browserController.reload()),
+                    onHome: () => unawaited(_browserController.goHome()),
+                    onSettings: _handleSettings,
+                  ),
+              ],
+            ),
+
+            // ── Full-YouTube-Mode floating settings pill ─────────────────────
+            if (_isFullYouTubeMode)
+              Positioned(
+                bottom: 20,
+                right: 16,
+                child: Opacity(
+                  opacity: 0.38,
+                  child: Material(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: _handleSettings,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.tune_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Settings',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            LoadingProgressBar(
-              progress: _browserState.progress,
-              visible: !_isPreparing && progressVisible,
-            ),
-            Expanded(
-              child: _isPreparing
-                  ? const Center(child: CircularProgressIndicator())
-                  : InAppWebView(
-                      key: _webViewKey,
-                      initialUrlRequest: URLRequest(url: WebUri(_initialUrl!)),
-                      initialUserScripts: _userScripts,
-                      initialSettings: _settings,
-                      onWebViewCreated: (controller) {
-                        _browserController.attach(controller);
-                        unawaited(_syncNavigationState());
-                      },
-                      onLoadStart: (controller, url) {
-                        _handleUrlChanged(url, isLoading: true, progress: 0);
-                        unawaited(_syncNavigationState());
-                      },
-                      onLoadStop: (controller, url) {
-                        _handleUrlChanged(url, isLoading: false, progress: 1);
-                        unawaited(_syncNavigationState());
-                      },
-                      onProgressChanged: (controller, progress) {
-                        _handleUrlChanged(
-                          null,
-                          isLoading: progress < 100,
-                          progress: progress / 100,
-                        );
-                      },
-                      onUpdateVisitedHistory:
-                          (controller, url, androidIsReload) {
-                            _handleUrlChanged(url);
-                            unawaited(_syncNavigationState());
-                          },
-                      onEnterFullscreen: (controller) {
-                        unawaited(_enterFullscreen());
-                      },
-                      onExitFullscreen: (controller) {
-                        unawaited(_exitFullscreen());
-                      },
-                      onPermissionRequest: (controller, request) async {
-                        return _handlePermissionRequest(request);
-                      },
-                      shouldInterceptRequest: (controller, request) async {
-                        if (AdBlocker.shouldBlock(request.url.toString())) {
-                          return WebResourceResponse(data: Uint8List(0));
-                        }
-                        return null;
-                      },
-                    ),
-            ),
-            BrowserToolbar(
-              canGoBack: _browserState.canGoBack,
-              canGoForward: _browserState.canGoForward,
-              onBack: () => unawaited(_browserController.goBack()),
-              onForward: () => unawaited(_browserController.goForward()),
-              onReload: () => unawaited(_browserController.reload()),
-              onHome: () => unawaited(_browserController.goHome()),
-              onSettings: _handleSettings,
-            ),
           ],
         ),
       ),
