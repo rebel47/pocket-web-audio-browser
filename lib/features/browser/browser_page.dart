@@ -54,6 +54,7 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
 
   static final UnmodifiableListView<UserScript> _userScripts =
       UnmodifiableListView([
+        // ── Keep page "visible" so background audio never pauses ─────────────
         UserScript(
           source: '''
 (function () {
@@ -77,6 +78,94 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
 ''',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           forMainFrameOnly: false,
+        ),
+
+        // ── Ad blocker: skip/remove YouTube and generic ads ──────────────────
+        UserScript(
+          source: r'''
+(function () {
+  'use strict';
+
+  var AD_ELEMENT_SELECTORS = [
+    '.ytp-ad-overlay-container',
+    '.ytp-ad-text-overlay',
+    '.ytp-ad-image-overlay',
+    '.ytp-ad-module',
+    '.ytp-suggested-action',
+    '.ytp-ad-feedback-dialog-container',
+    '#masthead-ad',
+    'ytd-banner-promo-renderer',
+    'ytd-statement-banner-renderer',
+    'ytd-ad-slot-renderer',
+    'ytd-in-feed-ad-layout-renderer',
+    'ytd-promoted-sparkles-web-renderer',
+    'ytd-promoted-video-renderer',
+    'ytd-display-ad-renderer',
+    'ytd-rich-item-renderer:has(ytd-ad-slot-renderer)',
+  ];
+
+  function removeAdElements() {
+    AD_ELEMENT_SELECTORS.forEach(function (sel) {
+      try {
+        document.querySelectorAll(sel).forEach(function (el) {
+          el.remove();
+        });
+      } catch (_) {}
+    });
+  }
+
+  function handleVideoAd() {
+    // Click skip button the moment it appears
+    var skipBtn = document.querySelector(
+      '.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, ' +
+      '.ytp-ad-skip-button-slot button, [class*="skip-ad"]'
+    );
+    if (skipBtn) {
+      skipBtn.click();
+      return;
+    }
+
+    // For non-skippable ads: mute + seek to end
+    var adShowing = document.querySelector(
+      '.ad-showing .html5-main-video, ' +
+      '.ad-showing video'
+    );
+    if (adShowing) {
+      try {
+        adShowing.muted = true;
+        if (adShowing.duration && isFinite(adShowing.duration)) {
+          adShowing.currentTime = adShowing.duration;
+        } else {
+          adShowing.playbackRate = 16;
+        }
+      } catch (_) {}
+    }
+  }
+
+  function tick() {
+    handleVideoAd();
+    removeAdElements();
+  }
+
+  // Observe DOM mutations — YouTube is a SPA, ads appear dynamically
+  try {
+    var observer = new MutationObserver(tick);
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  } catch (_) {}
+
+  // Periodic fallback (catches anything the observer misses)
+  setInterval(tick, 500);
+
+  // Re-run on YouTube SPA navigation
+  window.addEventListener('yt-navigate-finish', tick);
+  window.addEventListener('yt-page-data-updated', tick);
+})();
+''',
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
+          forMainFrameOnly: true,
         ),
       ]);
 
