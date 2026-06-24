@@ -35,6 +35,7 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
   );
   String? _initialUrl;
   bool _isPreparing = true;
+  bool _isFullYouTubeMode = false;
 
   static final InAppWebViewSettings _settings = InAppWebViewSettings(
     javaScriptEnabled: true,
@@ -98,15 +99,22 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
   }
 
   Future<void> _loadInitialUrl() async {
-    final initialUrl = await _browserController.initialUrl();
+    final results = await Future.wait([
+      _browserController.initialUrl(),
+      _preferences.getFullYouTubeMode(),
+    ]);
 
     if (!mounted) {
       return;
     }
 
+    final initialUrl = results[0] as String;
+    final fullYouTubeMode = results[1] as bool;
+
     setState(() {
       _initialUrl = initialUrl;
       _isPreparing = false;
+      _isFullYouTubeMode = fullYouTubeMode;
       _browserState = _browserState.copyWith(currentUrl: initialUrl);
     });
   }
@@ -167,6 +175,55 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
+  void _handleSettings() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Full YouTube Mode'),
+                    subtitle: const Text(
+                      'Hides the address bar for a cleaner viewing experience',
+                    ),
+                    secondary: const Icon(Icons.smart_display_outlined),
+                    value: _isFullYouTubeMode,
+                    onChanged: (value) async {
+                      await _preferences.saveFullYouTubeMode(value);
+                      setSheetState(() {});
+                      setState(() => _isFullYouTubeMode = value);
+                      if (value) {
+                        unawaited(_browserController.goHome());
+                      }
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   PermissionResponse _handlePermissionRequest(PermissionRequest request) {
     final protectedMediaResources = request.resources
         .where(
@@ -193,16 +250,17 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
       body: SafeArea(
         child: Column(
           children: [
-            Material(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: AddressBar(
-                  text: _browserState.currentUrl,
-                  onSubmitted: _handleSubmittedAddress,
+            if (!_isFullYouTubeMode)
+              Material(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: AddressBar(
+                    text: _browserState.currentUrl,
+                    onSubmitted: _handleSubmittedAddress,
+                  ),
                 ),
               ),
-            ),
             LoadingProgressBar(
               progress: _browserState.progress,
               visible: !_isPreparing && progressVisible,
@@ -263,6 +321,7 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
               onForward: () => unawaited(_browserController.goForward()),
               onReload: () => unawaited(_browserController.reload()),
               onHome: () => unawaited(_browserController.goHome()),
+              onSettings: _handleSettings,
             ),
           ],
         ),

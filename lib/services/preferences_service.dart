@@ -5,6 +5,7 @@ import '../core/constants.dart';
 class PreferencesService {
   static const _lastUrlKey = 'last_url';
   static const _homeUrlKey = 'home_url';
+  static const _fullYouTubeModeKey = 'full_youtube_mode';
 
   Future<String> getLastUrl() async {
     final preferences = await SharedPreferences.getInstance();
@@ -24,5 +25,15 @@ class PreferencesService {
   Future<void> saveHomeUrl(String url) async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(_homeUrlKey, url);
+  }
+
+  Future<bool> getFullYouTubeMode() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getBool(_fullYouTubeModeKey) ?? false;
+  }
+
+  Future<void> saveFullYouTubeMode(bool value) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_fullYouTubeModeKey, value);
   }
 }

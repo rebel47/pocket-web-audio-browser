@@ -8,6 +8,7 @@ class BrowserToolbar extends StatelessWidget {
     required this.onForward,
     required this.onReload,
     required this.onHome,
+    required this.onSettings,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class BrowserToolbar extends StatelessWidget {
   final VoidCallback onForward;
   final VoidCallback onReload;
   final VoidCallback onHome;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +50,11 @@ class BrowserToolbar extends StatelessWidget {
                 tooltip: 'Home',
                 onPressed: onHome,
                 icon: const Icon(Icons.home_outlined),
+              ),
+              IconButton(
+                tooltip: 'Settings',
+                onPressed: onSettings,
+                icon: const Icon(Icons.settings_outlined),
               ),
             ],
           ),
