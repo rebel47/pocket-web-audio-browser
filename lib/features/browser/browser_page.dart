@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../core/constants.dart';
+import '../../services/ad_blocker.dart';
 import '../../services/preferences_service.dart';
 import 'browser_controller.dart';
 import 'browser_state.dart';
@@ -245,6 +247,12 @@ class _BrowserPageState extends State<BrowserPage> with WidgetsBindingObserver {
                       },
                       onPermissionRequest: (controller, request) async {
                         return _handlePermissionRequest(request);
+                      },
+                      shouldInterceptRequest: (controller, request) async {
+                        if (AdBlocker.shouldBlock(request.url.toString())) {
+                          return WebResourceResponse(data: Uint8List(0));
+                        }
+                        return null;
                       },
                     ),
             ),
